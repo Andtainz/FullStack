@@ -4,6 +4,679 @@ Evualacion2
 
 # 🌿 Sativamente - E-commerce de Productos de Cultivo
 
+---
+
+## 🧪 Testing
+
+### Estrategia de Testing
+
+El proyecto implementa una estrategia de testing multinivel para garantizar la calidad del código:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    PIRÁMIDE DE TESTING                      │
+│                                                              │
+│                         /\                                   │
+│                        /  \      E2E Tests                   │
+│                       /    \     (Manual/Cypress)            │
+│                      /──────\                                │
+│                     /        \   Integration Tests           │
+│                    /          \  (Spring Boot Test)          │
+│                   /────────────\                             │
+│                  /              \ Unit Tests                 │
+│                 /                \ (JUnit 5, Jest)           │
+│                /──────────────────\                          │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Testing Backend (Spring Boot)
+
+#### Configuración Actual
+
+El proyecto incluye **Spring Boot Starter Test** que proporciona:
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-test</artifactId>
+    <scope>test</scope>
+</dependency>
+```
+
+**Librerías incluidas:**
+- **JUnit 5** - Framework de testing
+- **Mockito** - Mocking framework
+- **AssertJ** - Assertions fluidas
+- **Hamcrest** - Matchers
+- **Spring Test** - Utilidades de testing para Spring
+- **JSONPath** - Manipulación de JSON
+
+---
+
+#### 1. Unit Tests - Capa de Servicio
+
+**Ubicación:** `src/test/java/.../services/`
+
+**ProductoServicesImplTest.java**
+```java
+package com.vivitasol.projectbackend.services;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.vivitasol.projectbackend.entities.Categoria;
+import com.vivitasol.projectbackend.entities.Producto;
+import com.vivitasol.projectbackend.repositories.ProductoRepositories;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("Tests para ProductoServicesImpl")
+class ProductoServicesImplTest {
+
+    @Mock
+    private ProductoRepositories productoRepositories;
+
+    @InjectMocks
+    private ProductoServicesImpl productoServices;
+
+    private Producto producto;
+    private Categoria categoria;
+
+    @BeforeEach
+    void setUp() {
+        categoria = new Categoria();
+        categoria.setId(1L);
+        categoria.setNombre("Fumadores");
+
+        producto = new Producto();
+        producto.setId(1L);
+        producto.setNombre("Bong");
+        producto.setDescripcion("Bong de vidrio");
+        producto.setPrecio(7000L);
+        producto.setStock(10);
+        producto.setActivo(true);
+        producto.setCategoria(categoria);
+    }
+
+    @Test
+    @DisplayName("Crear producto exitosamente")
+    void testCrearProducto() {
+        // Arrange
+        when(productoRepositories.save(any(Producto.class))).thenReturn(producto);
+
+        // Act
+        Producto resultado = productoServices.crear(producto);
+
+        // Assert
+        assertNotNull(resultado);
+        assertEquals("Bong", resultado.getNombre());
+        assertEquals(7000L, resultado.getPrecio());
+        verify(productoRepositories, times(1)).save(producto);
+    }
+
+    @Test
+    @DisplayName("Obtener producto por ID existente")
+    void testObtenerProductoPorId() {
+        // Arrange
+        when(productoRepositories.findById(1L)).thenReturn(Optional.of(producto));
+
+        // Act
+        Producto resultado = productoServices.obtenerId(1L);
+
+        // Assert
+        assertNotNull(resultado);
+        assertEquals(1L, resultado.getId());
+        assertEquals("Bong", resultado.getNombre());
+    }
+
+    @Test
+    @DisplayName("Lanzar excepción al obtener producto inexistente")
+    void testObtenerProductoInexistente() {
+        // Arrange
+        when(productoRepositories.findById(999L)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        RuntimeException exception = assertThrows(
+            RuntimeException.class,
+            () -> productoServices.obtenerId(999L)
+        );
+        assertEquals("Producto no encontrado", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("Listar todos los productos")
+    void testListarProductos() {
+        // Arrange
+        Producto producto2 = new Producto();
+        producto2.setId(2L);
+        producto2.setNombre("Máscara");
+        
+        List<Producto> productos = Arrays.asList(producto, producto2);
+        when(productoRepositories.findAll()).thenReturn(productos);
+
+        // Act
+        List<Producto> resultado = productoServices.listarTodas();
+
+        // Assert
+        assertNotNull(resultado);
+        assertEquals(2, resultado.size());
+        verify(productoRepositories, times(1)).findAll();
+    }
+
+    @Test
+    @DisplayName("Actualizar producto existente")
+    void testActualizarProducto() {
+        // Arrange
+        Producto productoActualizado = new Producto();
+        productoActualizado.setNombre("Bong Mejorado");
+        productoActualizado.setDescripcion("Nueva descripción");
+        productoActualizado.setPrecio(9000L);
+        productoActualizado.setStock(15);
+        productoActualizado.setActivo(true);
+        productoActualizado.setCategoria(categoria);
+
+        when(productoRepositories.findById(1L)).thenReturn(Optional.of(producto));
+        when(productoRepositories.save(any(Producto.class))).thenReturn(productoActualizado);
+
+        // Act
+        Producto resultado = productoServices.actualizar(1L, productoActualizado);
+
+        // Assert
+        assertNotNull(resultado);
+        assertEquals("Bong Mejorado", resultado.getNombre());
+        assertEquals(9000L, resultado.getPrecio());
+    }
+
+    @Test
+    @DisplayName("Desactivar producto")
+    void testDesactivarProducto() {
+        // Arrange
+        when(productoRepositories.findById(1L)).thenReturn(Optional.of(producto));
+        when(productoRepositories.save(any(Producto.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        // Act
+        Producto resultado = productoServices.desactivar(1L);
+
+        // Assert
+        assertNotNull(resultado);
+        assertFalse(resultado.getActivo());
+        verify(productoRepositories, times(1)).save(producto);
+    }
+
+    @Test
+    @DisplayName("Eliminar producto existente")
+    void testEliminarProducto() {
+        // Arrange
+        when(productoRepositories.existsById(1L)).thenReturn(true);
+        doNothing().when(productoRepositories).deleteById(1L);
+
+        // Act
+        productoServices.eliminar(1L);
+
+        // Assert
+        verify(productoRepositories, times(1)).existsById(1L);
+        verify(productoRepositories, times(1)).deleteById(1L);
+    }
+
+    @Test
+    @DisplayName("Lanzar excepción al eliminar producto inexistente")
+    void testEliminarProductoInexistente() {
+        // Arrange
+        when(productoRepositories.existsById(999L)).thenReturn(false);
+
+        // Act & Assert
+        RuntimeException exception = assertThrows(
+            RuntimeException.class,
+            () -> productoServices.eliminar(999L)
+        );
+        assertEquals("Producto no encontrado", exception.getMessage());
+    }
+}
+```
+
+**Ejecutar tests unitarios:**
+```bash
+./mvnw test
+```
+
+---
+
+#### 2. Integration Tests - REST Controllers
+
+**Ubicación:** `src/test/java/.../controllers/`
+
+**ProductoRestControllersIntegrationTest.java**
+```java
+package com.vivitasol.projectbackend.controllers;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.hamcrest.Matchers.*;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vivitasol.projectbackend.entities.Categoria;
+import com.vivitasol.projectbackend.entities.Producto;
+import com.vivitasol.projectbackend.repositories.CategoriaRepositories;
+import com.vivitasol.projectbackend.repositories.ProductoRepositories;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@Transactional
+@ActiveProfiles("test")
+@DisplayName("Integration Tests para ProductoRestControllers")
+class ProductoRestControllersIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ProductoRepositories productoRepositories;
+
+    @Autowired
+    private CategoriaRepositories categoriaRepositories;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    private Categoria categoria;
+    private Producto producto;
+
+    @BeforeEach
+    void setUp() {
+        productoRepositories.deleteAll();
+        categoriaRepositories.deleteAll();
+
+        categoria = new Categoria();
+        categoria.setNombre("Fumadores");
+        categoria = categoriaRepositories.save(categoria);
+
+        producto = new Producto();
+        producto.setNombre("Bong");
+        producto.setDescripcion("Bong de vidrio");
+        producto.setPrecio(7000L);
+        producto.setStock(10);
+        producto.setActivo(true);
+        producto.setCategoria(categoria);
+    }
+
+    @Test
+    @DisplayName("GET /api/productos - Listar todos los productos")
+    void testListarProductos() throws Exception {
+        // Arrange
+        productoRepositories.save(producto);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/productos"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$[0].nombre", is("Bong")))
+                .andExpect(jsonPath("$[0].precio", is(7000)));
+    }
+
+    @Test
+    @DisplayName("GET /api/productos/{id} - Obtener producto por ID")
+    void testObtenerProductoPorId() throws Exception {
+        // Arrange
+        Producto savedProducto = productoRepositories.save(producto);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/productos/{id}", savedProducto.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre", is("Bong")))
+                .andExpect(jsonPath("$.descripcion", is("Bong de vidrio")))
+                .andExpect(jsonPath("$.precio", is(7000)))
+                .andExpect(jsonPath("$.activo", is(true)));
+    }
+
+    @Test
+    @DisplayName("POST /api/productos - Crear nuevo producto")
+    void testCrearProducto() throws Exception {
+        // Arrange
+        String productoJson = objectMapper.writeValueAsString(producto);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/productos")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(productoJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre", is("Bong")))
+                .andExpect(jsonPath("$.precio", is(7000)));
+    }
+
+    @Test
+    @DisplayName("PUT /api/productos/{id} - Actualizar producto")
+    void testActualizarProducto() throws Exception {
+        // Arrange
+        Producto savedProducto = productoRepositories.save(producto);
+        savedProducto.setNombre("Bong Premium");
+        savedProducto.setPrecio(9000L);
+        
+        String productoJson = objectMapper.writeValueAsString(savedProducto);
+
+        // Act & Assert
+        mockMvc.perform(put("/api/productos/{id}", savedProducto.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(productoJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre", is("Bong Premium")))
+                .andExpect(jsonPath("$.precio", is(9000)));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/productos/{id} - Eliminar producto")
+    void testEliminarProducto() throws Exception {
+        // Arrange
+        Producto savedProducto = productoRepositories.save(producto);
+
+        // Act & Assert
+        mockMvc.perform(delete("/api/productos/{id}", savedProducto.getId()))
+                .andExpect(status().isNoContent());
+
+        // Verificar que fue eliminado
+        mockMvc.perform(get("/api/productos/{id}", savedProducto.getId()))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    @DisplayName("PATCH /api/productos/{id}/desactivar - Desactivar producto")
+    void testDesactivarProducto() throws Exception {
+        // Arrange
+        Producto savedProducto = productoRepositories.save(producto);
+
+        // Act & Assert
+        mockMvc.perform(patch("/api/productos/{id}/desactivar", savedProducto.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo", is(false)));
+    }
+
+    @Test
+    @DisplayName("GET /api/productos/{id} - Producto no encontrado")
+    void testProductoNoEncontrado() throws Exception {
+        // Act & Assert
+        mockMvc.perform(get("/api/productos/999"))
+                .andExpect(status().is4xxClientError());
+    }
+}
+```
+
+**Ejecutar integration tests:**
+```bash
+./mvnw integration-test
+```
+
+---
+
+#### 3. Configuración de Perfil de Test
+
+**application-test.properties** (crear en `src/test/resources/`):
+```properties
+# Base de datos en memoria H2 para tests
+spring.datasource.url=jdbc:h2:mem:testdb
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+
+# JPA/Hibernate
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=create-drop
+spring.jpa.show-sql=true
+
+# Desactivar logs innecesarios
+logging.level.org.springframework=WARN
+logging.level.org.hibernate=WARN
+```
+
+**Agregar dependencia H2 al pom.xml:**
+```xml
+<dependency>
+    <groupId>com.h2database</groupId>
+    <artifactId>h2</artifactId>
+    <scope>test</scope>
+</dependency>
+```
+
+---
+
+### Testing Frontend (React)
+
+#### Configuración con Vitest y React Testing Library
+
+**Instalar dependencias:**
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom 
+npm install -D @testing-library/user-event jsdom
+```
+
+**vite.config.js** - Agregar configuración de test:
+```javascript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.js',
+  },
+})
+```
+
+**src/test/setup.js:**
+```javascript
+import { expect, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
+import * as matchers from '@testing-library/jest-dom/matchers';
+
+expect.extend(matchers);
+
+afterEach(() => {
+  cleanup();
+});
+```
+
+---
+
+#### 1. Unit Tests - Componentes
+
+**src/components/__tests__/ProductCard.test.jsx:**
+```javascript
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import ProductCard from '../ProductCard';
+
+describe('ProductCard', () => {
+  const mockProducto = {
+    id: 1,
+    nombre: 'Bong',
+    descripcion: 'Bong de vidrio',
+    precio: 7000,
+    activo: true
+  };
+
+  it('renderiza correctamente el producto', () => {
+    render(
+      <BrowserRouter>
+        <ProductCard producto={mockProducto} />
+      </BrowserRouter>
+    );
+
+    expect(screen.getByText('Bong')).toBeInTheDocument();
+    expect(screen.getByText('Bong de vidrio')).toBeInTheDocument();
+    expect(screen.getByText('$7.000')).toBeInTheDocument();
+  });
+
+  it('muestra badge de disponible cuando activo es true', () => {
+    render(
+      <BrowserRouter>
+        <ProductCard producto={mockProducto} />
+      </BrowserRouter>
+    );
+
+    expect(screen.getByText('Disponible')).toBeInTheDocument();
+  });
+
+  it('muestra badge de no disponible cuando activo es false', () => {
+    const productoInactivo = { ...mockProducto, activo: false };
+    
+    render(
+      <BrowserRouter>
+        <ProductCard producto={productoInactivo} />
+      </BrowserRouter>
+    );
+
+    expect(screen.getByText('No disponible')).toBeInTheDocument();
+  });
+
+  it('tiene enlace correcto al detalle del producto', () => {
+    render(
+      <BrowserRouter>
+        <ProductCard producto={mockProducto} />
+      </BrowserRouter>
+    );
+
+    const link = screen.getByText('Ver detalle').closest('a');
+    expect(link).toHaveAttribute('href', '/productos/1');
+  });
+});
+```
+
+---
+
+#### 2. Integration Tests - API Service
+
+**src/api/__tests__/apiService.test.js:**
+```javascript
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { apiService } from '../apiService';
+
+describe('apiService', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn();
+  });
+
+  describe('getProductos', () => {
+    it('obtiene productos exitosamente', async () => {
+      const mockProductos = [
+        { id: 1, nombre: 'Bong', precio: 7000 },
+        { id: 2, nombre: 'Máscara', precio: 5000 }
+      ];
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockProductos
+      });
+
+      const result = await apiService.getProductos();
+
+      expect(result).toEqual(mockProductos);
+      expect(fetch).toHaveBeenCalledWith('http://localhost:8080/api/productos');
+    });
+
+    it('maneja errores correctamente', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'Error del servidor' })
+      });
+
+      await expect(apiService.getProductos()).rejects.toThrow();
+    });
+  });
+
+  describe('crearProducto', () => {
+    it('crea un producto exitosamente', async () => {
+      const nuevoProducto = {
+        nombre: 'Bong',
+        descripcion: 'Bong de vidrio',
+        precio: 7000,
+        stock: 10,
+        categoriaId: 7,
+        activo: true
+      };
+
+      const mockResponse = { id: 1, ...nuevoProducto };
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse
+      });
+
+      const result = await apiService.crearProducto(nuevoProducto);
+
+      expect(result).toEqual(mockResponse);
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/api/productos',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        })
+      );
+    });
+  });
+});
+```
+
+---
+
+#### 3. E2E Tests - Páginas completas
+
+**src/pages/__tests__/Productos.test.jsx:**
+```javascript
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
+import Productos from '../Productos';
+import * as apiService from '../../api/apiService';
+
+vi.mock('../../api/apiService');
+
+describe('Productos Page', () => {
+  const mockProductos = [
+    { id: 1, nombre: 'Bong', precio: 7000, activo: true, categoriaId: 7 },
+    { id: 2, nombre: 'Máscara', precio: 5000, activo: true, categoriaId: 7 }
+  ];
+
+  const mockCategorias = [
+    { id: 7, nombre: 'Fumadores' },
+    { id: 8, nombre: 'Cultivo' }
+  ];
+
+  beforeEach(() => {
+    apiService.getProductos.mockResolvedValue(mockProductos);
+    apiSer# 🌿 Sativamente - E-commerce de Productos de Cultivo
+
 Aplicación web fullstack para la venta de productos relacionados con el cultivo de plantas. Incluye catálogo de productos, carrito de compras, panel de administración y gestión de usuarios.
 
 ---
@@ -20,7 +693,8 @@ Aplicación web fullstack para la venta de productos relacionados con el cultivo
 8. [Estructura del Proyecto](#-estructura-del-proyecto)
 9. [API Endpoints](#-api-endpoints)
 10. [Base de Datos](#-base-de-datos)
-11. [Funcionalidades](#-funcionalidades)
+11. [Testing](#-testing)
+12. [Funcionalidades](#-funcionalidades)
 
 ---
 
@@ -1016,5 +1690,6 @@ npm run build
 ```
 
 ---
+
 
 **¡Sativamente! 🌿**
